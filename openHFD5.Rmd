@@ -1,0 +1,165 @@
+---
+title: "OpenHDF5"
+author: "Sarah Graves"
+date: "June 20, 2016"
+output: html_document
+---
+
+# Working with HDF5 files in R
+
+[Link to tutorial page](http://neon-workwithdata.github.io/neon-data-institute-2016/R/intro-hdf5-R/)
+
+
+## Set up and view data file
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = T)
+```
+
+```{r LOAD-LIBRARIES, warning = F}
+
+library(rhdf5)
+library(raster)
+library(rgdal)
+
+```
+
+## Get information from H5 file
+
+```{r SELECT-FILE}
+
+# set file path
+# use ../ to move up a directory to the data folder
+h5file <- "../NEONdata/D17-California/TEAK/2013/spectrometer/reflectance/Subset3NIS1_20130614_100459_atmcor.h5"
+
+# view h5 structure
+h5ls(h5file)
+
+```
+
+```{r IMPORT-SPATIAL-INFO}
+
+# import spatial information
+mapInfo <- h5read(h5file,
+                  "map info",
+                  read.attributes = T)
+
+```
+
+```{r GET-REFL-METADATA}
+
+# set reflectance info
+reflInfo <- h5readAttributes(h5file,
+                             "Reflectance")
+
+# set scale factor and no data value objects
+scaleFactor <- reflInfo$`Scale Factor`
+
+noDataValue <- as.numeric(reflInfo$`data ignore value`)
+```
+
+## Use functions to automatically extract this information
+
+NEON wrote functions to do many data extractions manually. Information is found on the [website](http://neon-workwithdata.github.io/neon-data-institute-2016/R/open-NEON-hdf5-functions/)
+
+```{r SOURCE-FUNCTION-CODE}
+
+rm(list = ls())
+
+#source("neon_hdf5_functions.R")
+
+f <- "../NEONdata/D17-California/TEAK/2013/spectrometer/reflectance/Subset3NIS1_20130614_100459_atmcor.h5"
+```
+
+```{r INSTALL-AOP-FUNCTIONS-GITHUB}
+
+# another option to pull functions from GitHub
+library(devtools)
+install_github("lwasser/neon-aop-package/neonAOP")
+library(neonAOP)
+```
+
+
+## Apply functions to TEAK data
+
+```{r SET-ARGUMENTS}
+
+# define the CRS definition by EPSG code
+epsg <- 32611
+
+# set wavelengths
+wavelengths <- h5read(f,"wavelength")
+```
+
+```{r PLOT-SINGLE-BAND}
+
+### final Code ####
+# H5close()
+
+# find the dimensions of the data to help determine the slice range
+# returns cols, rows, wavelengths
+dims <- get_data_dims(fileName = f)
+
+# open band, return cleaned and scaled raster
+band <- open_band(fileName=f,
+                  bandNum = 56,
+                  epsg=epsg)
+
+# plot data
+plot(band,
+     main="Raster for Lower Teakettle - B56")
+
+```
+
+
+```{r PLOT-RGB-IMAGE}
+
+# extract 3 bands
+# create  alist of the bands
+bands <- list(58, 34, 19)
+
+# use lapply to run the band function across all three of the bands
+rgb_rast <- lapply(bands, open_band,
+                   fileName=f,
+                   epsg=epsg)
+
+# create a raster stack from the output
+rgb_rast <- stack(rgb_rast)
+
+# plot the output, use a linear stretch to make it look nice
+plotRGB(rgb_rast,
+        stretch='lin')
+
+```
+
+```{r PLOT-FASLE-COLOR-IMAGE}
+
+# CIR create  alist of the bands
+# bands <- c(90, 34, 19)
+# 
+# CIRStack <- create_stack(f, 
+#                          bands, 
+#                          epsg)
+# plot_stack(CIRStack,
+#            title="Color Infrared (CIR) Image")
+# 
+# # create a list of the bands
+# bands <- list(152,90,58)
+# aStack <- create_stack(f, bands, epsg)
+# plot_stack(aStack,
+#            title="another combo")
+
+```
+
+## Save data
+
+```{r EXPORT-GEOTIFF}
+
+# export as a GeoTIFF
+writeRaster(CIRStack,
+            file="../outputs/TEAK/TEAK_CIR_image.tif",
+            format="GTiff",
+            overwrite=TRUE)
+
+```
+
